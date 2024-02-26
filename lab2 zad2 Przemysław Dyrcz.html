@@ -67,7 +67,7 @@
         var prevX, prevY;      // previous mouse position during a drag.
         
         var colorChoice;  // Integer code for the selected color in the "colorChoide"
-        var shapeChoice;   // Corrected variable name
+        var shapeChoice;  
         
         function doMouseDown(evt) {
             console.log("Mouse Down");
@@ -91,7 +91,7 @@
                 document.addEventListener("mouseup", doMouseUp, false);
             }
             colorChoice = Number(document.getElementById("colorChoice").value);
-            shapeChoice = Number(document.getElementById("shapeChoice").value); // Corrected variable name
+            shapeChoice = Number(document.getElementById("shapeChoice").value); 
 
             // TODO: Anything else to do when mouse is first pressed?
         }
