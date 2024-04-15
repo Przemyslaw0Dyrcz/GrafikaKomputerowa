@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Unlit Cube Example</title>
+
+    <script src="glsim.js"></script> <!-- load the OpenGL 1.1 simulation code -->
+    <style type="text/css" id="operaUserStyle"></style>
+    <script>
+        let objectNumber = 1;
+        let rotateX = 0,
+            rotateY = 0,
+            rotateZ = 0;
+
+            function trojkat(j, k, n) {
+    glColor3f(0.5, 0.5, 0.5); // Ustawienie koloru na szary
+
+    glBegin(GL_LINE_LOOP); // Użyj GL_LINE_LOOP, aby rysować tylko krawędzie
+    glVertex3f(Math.cos(j * 2 * Math.PI / n), Math.sin(j * 2 * Math.PI / n), 1);
+    glVertex3f(Math.cos(k * 2 * Math.PI / n), Math.sin(k * 2 * Math.PI / n), 1);
+    glVertex3f(0, 0, 0);
+    glEnd();
+}
+
+function piramida(size, n) {
+    glPushMatrix();
+    glTranslatef(0, 0.5, 0);
+    glRotatef(90, 1, 0, 0);
+    glScalef(size, size, size);
+    glColor3f(0, 0, 1);
+
+    for (let i = 0; i < n; i++) {
+        trojkat(i - 1, i, n);
+    }
+    glPopMatrix();
+}
+
+function spirala(liczbaPetli, liczbaPunktowNaPetle, inkrementacjaPromienia) {
+    const liczbaWierzcholkow = liczbaPetli * liczbaPunktowNaPetle;
+    const inkrementacjaKata = (2 * Math.PI) / liczbaPunktowNaPetle;
+    const inkrementacjaPromieniaSpirali = inkrementacjaPromienia / liczbaPunktowNaPetle;
+
+    glBegin(GL_LINE_STRIP);
+
+    let promien = 0;
+    let kat = 0;
+
+    for (let i = 0; i < liczbaWierzcholkow; i++) {
+        const x = promien * Math.cos(kat);
+        const y = promien * Math.sin(kat);
+        const z = i * inkrementacjaPromieniaSpirali; 
+
+        glVertex3f(x, y, z);
+
+        kat += inkrementacjaKata;
+        promien += inkrementacjaPromieniaSpirali;
+    }
+
+    glEnd();
+}
+
+
+        function display() {
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            glLoadIdentity();
+            glRotatef(rotateZ, 0, 0, 1);
+            glRotatef(rotateY, 0, 1, 0);
+            glRotatef(rotateX, 1, 0, 0);
+
+            if (objectNumber === 1) {
+                spirala(5, 100, 0.1);
+            } else if (objectNumber === 2) {
+                piramida(1, 9);
+            }
+
+            glFlush();
+        }
+
+        function initGL() {
+            glMatrixMode(GL_PROJECTION);
+            glOrtho(-1, 1, -1, 1, -1, 1);
+            glMatrixMode(GL_MODELVIEW);
+            glEnable(GL_DEPTH_TEST);
+            glClearColor(0, 0, 0, 1);
+        }
+
+        function doKeyDown(evt) {
+            let key = evt.keyCode;
+            if (key === 49) { // 1
+                objectNumber = 1;
+            } else if (key === 50)  // 2
+                objectNumber = 2;  
+           else if ( key == 37 ) // left
+           rotateY -= 15;
+            else if ( key == 39 ) // right
+           rotateY += 15;
+            else if ( key == 40) // down
+           rotateX += 15;
+             else if ( key == 38 ) // up
+           rotateX -= 15;
+            else if ( key == 33 ) // page up
+           rotateZ += 15;
+            else if ( key == 34 ) // page down
+           rotateZ -= 15;
+            else if ( key == 36 )  // home
+           rotateX = rotateY = rotateZ = 0;
+            else {
+                evt.preventDefault();
+            }
+            display();
+        }
+
+        function init() {
+            try {
+                glsimUse("glcanvas");
+            } catch (e) {
+                document.getElementById("canvas-holder").innerHTML =
+                    "Sorry, an error occured:<br>" + e;
+                return;
+            }
+            document.onkeydown = doKeyDown;
+            initGL();
+            display();
+        }
+    </script>
+
+</head>
+
+<body onload="init()">
+
+    <noscript>
+        <p><b>Sorry, this page requires JavaScript!</b></p>
+    </noscript>
+
+    <div id="canvas-holder">
+        <canvas id="glcanvas" width="500" height="500"></canvas>
+    </div>
+
+</body>
+
+</html>
