@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<!--
+ *  Shows a scene (a teapot on a short cylindrical base) that is illuminated
+ *  by up to four lights plus global ambient light.  The user can turn the
+ *  lights on and off.  The global ambient light is a dim white.  There is 
+ *  a white "viewpoint" light that points from the direction of the viewer
+ *  into the scene.  There is a red light, a blue light, and a green light
+ *  that rotate in circles above the teapot.  (The user can turn the animation
+ *  on and off.)  The locations of the colored lights are marked by spheres,
+ *  which are gray when the light is off and are colored by some emission color
+ *  when the light is on.  The teapot is gray with weak specular highlights.
+ *  The base is colored with a spectrum.  (The user can turn the display of
+ *  the base on and off.)  The mouse can be used to rotate the scene.
+-->
+<head>
+<meta charset="UTF-8">
+<title>Four Lights</title>
+<link rel="stylesheet" href="../demo.css">
+<script src="../script/demo-core.js"></script>
+<script src="../script/glsim.js"></script>
+<script src="../script/teapot-model-IFS.js"></script>
+<script>
+var animating = false;  // tells whether the animation is running
+function doFrame() {
+    if (animating) {
+	frameNumber++;
+	display();
+	setTimeout(doFrame, 30);
+    }
+}
+var animate;       // checkbox that controls animation
+var purple = [0.5, 0, 0.5, 1];
+var white = [1, 1, 1, 1];
+var camera;
+
+var ambientLight;  // checkbox for turning global ambient light on and off
+var viewpointLight, redLight, blueLight, greenLight;  // checkboxes for turning lights on and off
+
+var animating = false;  // tells whether the animation is running
+var frameNumber = 0;  // frame number for use in animation
+
+//------------------- Drawing functions ----------------------------------------
+
+var materialProperties = [
+    [ /* 1, 12 - basic gray */ 0.6, 0.6, 0.6, 1.0, 0.6, 0.6, 0.6, 1.0, 1, 1, 1, 1, 16 ],
+    [ /* 2, 13 - "jade" */   0.135, 0.2225, 0.1575, 1.0, 0.54, 0.89, 0.63, 1.0, 0.316228, 0.316228, 0.316228, 1.0, 0.1*128 ],
+    [ /* 3, 14 - "brass" */   0.329412, 0.223529, 0.027451, 1.0, 0.780392, 0.568627, 0.113725, 1.0, 0.992157, 0.941176, 0.807843, 1.0, 0.21794872*128 ],
+    [ /* 4, 15 - "bronze" */   0.2125, 0.1275, 0.054, 1.0, 0.714, 0.4284, 0.18144, 1.0, 0.393548, 0.271906, 0.166721, 1.0, 0.2*128 ],
+    [ /* 5, 16 - "copper" */   0.19125, 0.0735, 0.0225, 1.0, 0.7038, 0.27048, 0.0828, 1.0, 0.256777, 0.137622, 0.086014, 1.0, 0.1*128 ],
+    [ /* 6, 17 - "gold" */   0.24725, 0.1995, 0.0745, 1.0, 0.75164, 0.60648, 0.22648, 1.0, 0.628281, 0.555802, 0.366065, 1.0, 0.4*128 ],
+    [ /* 7, 18 - "green plastic" */   0.0, 0.0, 0.0, 1.0, 0.1, 0.35, 0.1, 1.0, 0.45, 0.55, 0.45, 1.0, .25*128 ],
+    [ /* 8, 19 - "red plastic" */   0.0, 0.0, 0.0, 1.0, 0.5, 0.0, 0.0, 1.0, 0.7, 0.6, 0.6, 1.0, .25*128 ],
+    [ /* 9, 20 - "black plastic" */   0, 0, 0, 1.0, 0.01, 0.01, 0.01, 1.0, 1, 1, 1, 1.0, .25*128 ],
+    [ /* 10, 21 - "black rubber" */   0.02, 0.02, 0.02, 1.0, 0.01, 0.01, 0.01, 1.0, 0.4, 0.4, 0.4, 1.0, .078125*128 ],
+    [ /* 11, 22 - "cyan rubber" */   0.0, 0.05, 0.05, 1.0, 0.4, 0.5, 0.5, 1.0, 0.04, 0.7, 0.7, 1.0, .078125*128 ],
+];
+
+function uvSphere(radius, slices, stacks) {
+    var i,j;
+    for (j = 0; j < stacks; j++) {
+        var latitude1 = (Math.PI/stacks) * j - Math.PI/2;
+        var latitude2 = (Math.PI/stacks) * (j+1) - Math.PI/2;
+        var sinLat1 = Math.sin(latitude1);
+        var cosLat1 = Math.cos(latitude1);
+        var sinLat2 = Math.sin(latitude2);
+        var cosLat2 = Math.cos(latitude2);
+        glBegin(GL_TRIANGLE_STRIP);
+        for (i = 0; i <= slices; i++) {
+            var longitude = (2*Math.PI/slices) * i;
+            var sinLong = Math.sin(longitude);
+            var cosLong = Math.cos(longitude);
+            var x1 = cosLong * cosLat1;
+            var y1 = sinLong * cosLat1;
+            var z1 = sinLat1;
+            var x2 = cosLong * cosLat2;
+            var y2 = sinLong * cosLat2;
+            var z2 = sinLat2;
+            glNormal3d(x2,y2,z2);
+	    glVertex3d(radius*x2,radius*y2,radius*z2);
+	    glNormal3d(x1,y1,z1);
+            glVertex3d(radius*x1,radius*y1,radius*z1);
+        }
+        glEnd();
+    }
+} // end uvSphere
+
+/*  Sets the positions of the colored lights and turns them on and off, depending on
+ *  the state of the redLight, greenLight, and blueLight options.  Draws a small
+ *  sphere at the location of each light.
+ */
+function lights() {
+
+    glColor3d(0.5,0.5,0.5);
+    var zero = [ 0, 0, 0, 1 ];
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, zero);
+        glEnable(GL_LIGHT0);
+        glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, [0.3,0.3,0.3]); 
+        glEnable(GL_LIGHT1);
+        glPushMatrix();
+        glRotated(-frameNumber, 0, 1, 0);
+        glTranslated(10, 7, 0);
+        glLightfv(GL_LIGHT1, GL_POSITION, zero);
+        uvSphere(0.5, 16, 8);
+        glPopMatrix();
+    
+    
+
+} 
+
+
+
+
+/*  Draws a cylinder with height 2 and radius 1, centered at the origin, with its axis
+ *  along the z-axis.  A spectrum of hues is applied to the vertices along the edges
+ *  of the cylinder.  (Since GL_COLOR_MATERIAL is enabled in this program, the colors
+ *  specified here are used as ambient and diffuse material colors for the cylinder.)
+ */
+ function colorArrayForHue(h, s, v) {
+    var r,g,b;
+    var c,x;
+    h = h*359;
+    c = v*s;
+    x = (h < 120)? h/60 : (h < 240)? (h-120)/60 : (h-240)/60;
+    x = c * (1-Math.abs(x-1));
+    x += (v-c);
+    switch (Math.floor(h/60)) {
+        case 0: r = v; g = x; b = v-c; break;
+        case 1: r = x; g = v; b = v-c; break;
+        case 2: r = v-c; g = v; b = x; break;
+        case 3: r = v-c; g = x; b = v; break;
+        case 4: r = x; g = v-c; b = v; break;
+        case 5: r = v; g = v-c; b = x; break;
+    }
+    var array = new Array(4);
+    array[0] = r;
+    array[1] = g;
+    array[2] = b;
+    array[3] = 1;
+    return array;
+}
+
+
+function drawCylinder() {
+    var i;
+    var rgba;
+    glBegin(GL_TRIANGLE_STRIP);
+    for (i = 0; i <= 64; i++) {
+        var angle = 2*Math.PI/64 * i;
+        var x = Math.cos(angle);
+        var y = Math.sin(angle);
+        rgba = colorArrayForHue(i/64.0, 1, 0.6);
+        glColor3dv(rgba);
+        glNormal3d( x, y, 0 );  // Normal for both vertices at this angle.
+        glVertex3d( x, y, 1 );  // Vertex on the top edge.
+        glVertex3d( x, y, -1 ); // Vertex on the bottom edge.
+    }
+    glEnd();
+    glNormal3d( 0, 0, 1 );
+    glBegin(GL_TRIANGLE_FAN);  // Draw the top, in the plane z = 1.
+    glColor3d(1,1,1);  // ambient and diffuse for center
+    glVertex3d( 0, 0, 1);
+    for (i = 0; i <= 64; i++) {
+        var angle = 2*Math.PI/64 * i;
+        var x = Math.cos(angle);
+        var y = Math.sin(angle);
+        rgba = colorArrayForHue(i/64.0, 1, 0.6);
+        glColor3dv(rgba);
+        glVertex3d( x, y, 1 );
+    }
+    glEnd();
+    glNormal3f( 0, 0, -1 );  
+    glBegin(GL_TRIANGLE_FAN);  // Draw the bottom, in the plane z = -1
+    glColor3d(1,1,1);  // ambient and diffuse for center
+    glVertex3d( 0, 0, -1);
+    for (i = 64; i >= 0; i--) {
+        var angle = 2*Math.PI/64 * i;
+        var x = Math.cos(angle);
+        var y = Math.sin(angle);
+        rgba = colorArrayForHue(i/64.0, 1, 0.6);
+        glColor3dv(rgba);
+        glVertex3d( x, y, -1 );
+    }
+    glEnd();    
+}
+function trojkat(j, k, n) {
+    glColor3f(0.5, 0.5, 0.5); // Ustawienie koloru na szary
+    var odbicie = [ 1, 0, 1, 1 ];
+    var bgcolor = [0.0, 0.7, 0.5, 1.0];
+    glMaterialfv (GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, bgcolor);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, odbicie);
+    glBegin(GL_TRIANGLES);
+    glVertex3f(Math.cos(j * 2 * Math.PI / n), Math.sin(j * 2 * Math.PI / n), 1);
+    glVertex3f(Math.cos(k * 2 * Math.PI / n), Math.sin(k * 2 * Math.PI / n), 1);
+    glVertex3f(0, 0, 0);
+    glEnd();
+    glColor3f(0.5, 1, 1); // Ustawienie koloru na szary
+    glBegin(GL_LINE_LOOP);
+    glVertex3f(Math.cos(j * 2 * Math.PI / n), Math.sin(j * 2 * Math.PI / n), 1.001);
+    glVertex3f(Math.cos(k * 2 * Math.PI / n), Math.sin(k * 2 * Math.PI / n), 1.001);
+    glVertex3f(0, 0, 0.001);
+    glEnd();
+}
+
+function piramida(size, n) {
+    glPushMatrix();
+
+
+    glTranslatef(0, 0.5, 0);
+    glRotatef(90, 1, 0, 0);
+    glScalef(size, size, size);
+    glColor3f(0, 0, 1);
+    for (let i = 0; i < n; i++) {
+        trojkat(i - 1, i, n);
+    }
+    glPopMatrix();
+}
+/* Draws the scene.
+ */
+function display() {
+
+    glClearColor(0,0,0,1);
+    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT ); 
+
+    camera.apply();
+
+    lights();
+
+    
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.3, 0.3, 0.3, 1] );
+
+        glPushMatrix();
+        glTranslated(0, -5, 0);
+        glRotated(-90, 1, 0, 0);
+        glScaled(10,10,0.5);
+        drawCylinder();
+        glPopMatrix();
+    
+
+    glColor3d(0.7,0.7,0.7);  // sets diffuse and ambient color for teapot
+
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.4, 0.4, 0.4, 1]);
+
+    glPushMatrix();
+    glTranslatef(0,1.8,0);
+    glScalef(0.65,0.65,0.65);
+    piramida(10,9);
+    glPopMatrix();
+}
+
+/* Initialization, including setting up a camera and configuring the four lights.
+ */
+function initGL() {
+    glClearColor(0, 0, 0, 1);  
+    glEnable(GL_DEPTH_TEST); 
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glEnable(GL_NORMALIZE);
+    glEnable(GL_COLOR_MATERIAL);
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+    glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 32);
+
+    var dim = [ 0.5, 0.5, 0.5, 1 ];
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, dim);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, dim);
+
+
+
+ 
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, [1,1,1]);
+    glLightfv(GL_LIGHT1, GL_SPECULAR, [1,1,1]);
+}
+
+/* Animation function, called every 30 milliseconds if an animation is runnin */
+
+
+function init() {
+    try {
+        glsimUse("maincanvas");
+    }
+    catch (e) {
+        document.getElementById("canvas-holder").innerHTML="<p><b>Sorry, an error occurred:<br>" +
+                e + "</b></p>";
+	return;
+    }
+    animate = document.getElementById("animate");
+    animate.onchange = function() {
+	if (animate.checked) {
+	    animating = true;
+	    doFrame();
+	}
+	else {
+	    animating = false;
+	}
+    }
+    initGL();
+    camera = new Camera();
+    camera.lookAt(5,10,30, 0,0,0, 0,1,0);
+    camera.setScale(15);
+    camera.installTrackball(display);
+    display();
+}
+
+</script>
+</head>
+<body onload="init()">
+
+<div id="content">
+
+<h3 id="headline">Four Lights Demo</h3>
+
+<div id="canvas-holder">
+<canvas id="maincanvas" width="400" height="400"></canvas>
+</div>
+
+<div id="tools">
+<p>
+
+    <label><input type="checkbox" id="animate">Animate</label><br><br>
+</p>
+</div>
+
+</div>
+
+
+<div id="help-content" style="display:none">
+<h3>About this demo...</h3>
+
+<i>glMaterialfv</i>.</p>
+</div>
+
+
+
+<!-- support for help text -- do not change. -->
+
+<div id="helpBG" style="display:none"></div>
+</body>
+</html>
